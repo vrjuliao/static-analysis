@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <string>
 
+#include "llvm/ADT/Statistic.h"
 #include "llvm/Pass.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Function.h"
@@ -14,14 +15,15 @@
 #include "RangeAnalysis.h"
 
 using namespace llvm;
-
-// STATISTIC(InstructionsEliminated, "Number of instructions eliminated");
-// STATISTIC(BasicBlocksEliminated,  "Number of basic blocks entirely eliminated");
+// Used to enable the stats computing. Comment the below line to disable it
+#define STATS
+#define 	DEBUG_TYPE   "DeadCodeElimination"
+STATISTIC(InstructionsEliminated, "Number of instructions eliminated");
+STATISTIC(BasicBlocksEliminated,  "Number of basic blocks entirely eliminated");
 
 namespace {
 class RADeadCodeElimination : public llvm::FunctionPass {
 private:
-  std::vector<std::pair<BranchInst*, int>> toOverride;
 
   void replaceConditionalBranch(BranchInst *br, int successorIndex){
     BranchInst* New = BranchInst::Create(br->getSuccessor(successorIndex));
@@ -152,21 +154,28 @@ private:
 
 public:
   static char ID;
-  RADeadCodeElimination() : FunctionPass(ID) {
-    this->toOverride = {};
-  }
+  RADeadCodeElimination() : FunctionPass(ID) {}
   virtual ~RADeadCodeElimination() {}
   
 
   virtual bool runOnFunction(Function &F) {
     // InterProceduralRA<Cousot> &ra = getAnalysis<InterProceduralRA<Cousot>>();
     bool has_changed = false;
+    BasicBlocksEliminated = F.size();
+    InstructionsEliminated = 0;
     for (Function::iterator bb = F.begin(), bbEnd = F.end(); bb != bbEnd; ++bb) {
+      InstructionsEliminated += bb->size();
       if (BranchInst *br = dyn_cast<BranchInst>(--(bb->end()))){
         has_changed |= solveBranchInstruction(br);
       }
     }
+
     removeUnreachableBlocks(F);
+    
+    BasicBlocksEliminated -= F.size();
+    for (Function::iterator bb = F.begin(), bbEnd = F.end(); bb != bbEnd; ++bb){
+      InstructionsEliminated -= bb->size();
+    }
     return has_changed;
   }
 
