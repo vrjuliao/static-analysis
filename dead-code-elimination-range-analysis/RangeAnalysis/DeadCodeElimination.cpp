@@ -39,18 +39,68 @@ private:
     // I->dump();
     // errs() << '\n';
     
-    has_changed = false;
+    bool has_changed = false;
     switch (I->getPredicate()){
-      case CmpInst::ICMP_SLT:
-        //This code is always true
-        if (range1.getUpper().slt(range2.getLower())) {
+      case CmpInst::ICMP_EQ:
+        if (range1.getLower() == range1.getUpper() == 
+            range2.getLower() == range2.getUpper()) {
           replaceConditionalBranch(br, 0);
           has_changed = true;
-        } else if(range1.getLower().sge(range2.getUpper())) {
+        } else {
+            if(I->isSigned) {
+              (range1.getUpper().sle(range2.getLower())) {
+              replaceConditionalBranch(br, 1);
+              has_changed = true;
+            } else {
+              (range2.getUpper().sle(range1.getLower())) {
+              replaceConditionalBranch(br, 1);
+              has_changed = true;
+            }
+        }
+        break;
+ 
+        break;
+
+      case CmpInst::ICMP_UGT:
+        if (range1.getLower().ugt(range2.getUpper())) {
+          replaceConditionalBranch(br, 0);
+          has_changed = true;
+        } else if(range1.getUpper().ule(range2.getLower())) {
           replaceConditionalBranch(br, 1);
           has_changed = true;
         }
         break;
+
+      case CmpInst::ICMP_UGE:
+        if (range1.getLower().uge(range2.getUpper())) {
+          replaceConditionalBranch(br, 0);
+          has_changed = true;
+        } else if(range1.getUpper().ult(range2.getLower())) {
+          replaceConditionalBranch(br, 1);
+          has_changed = true;
+        }
+        break;
+
+      case CmpInst::ICMP_ULT:
+        if (range1.getUpper().ult(range2.getLower())) {
+          replaceConditionalBranch(br, 0);
+          has_changed = true;
+        } else if(range1.getLower().uge(range2.getUpper())) {
+          replaceConditionalBranch(br, 1);
+          has_changed = true;
+        }
+        break;
+
+      case CmpInst::ICMP_ULE:
+        if (range1.getUpper().ule(range2.getLower())) {
+          replaceConditionalBranch(br, 0);
+          has_changed = true;
+        } else if(range1.getLower().ugt(range2.getUpper())) {
+          replaceConditionalBranch(br, 1);
+          has_changed = true;
+        }
+        break;
+
       case CmpInst::ICMP_SGT:
         //This code is always true
         if (range1.getLower().sgt(range2.getUpper())) {
@@ -61,6 +111,37 @@ private:
           has_changed = true;
         }
         break;
+
+      case CmpInst::ICMP_SGE:
+        if (range1.getUpper().sge(range2.getLower())) {
+            replaceConditionalBranch(br, 0);
+            has_changed = true;
+        } else if(range1.getLower().slt(range2.getUpper())) {
+          replaceConditionalBranch(br, 1);
+          has_changed = true;
+        break;
+
+      case CmpInst::ICMP_SLT:
+        //This code is always true
+        if (range1.getUpper().slt(range2.getLower())) {
+          replaceConditionalBranch(br, 0);
+          has_changed = true;
+        } else if(range1.getLower().sge(range2.getUpper())) {
+          replaceConditionalBranch(br, 1);
+          has_changed = true;
+        }
+        break;
+
+        case CmpInst::ICMP_SLE:
+        if (range1.getUpper().sle(range2.getLower())) {
+          replaceConditionalBranch(br, 0);
+          has_changed = true;
+        } else if(range1.getLower().sgt(range2.getUpper())) {
+          replaceConditionalBranch(br, 1);
+          has_changed = true;
+        }
+        break;
+
       default: break;
     }
     return has_changed;
