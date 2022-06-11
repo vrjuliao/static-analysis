@@ -15,6 +15,9 @@
 
 using namespace llvm;
 
+// STATISTIC(InstructionsEliminated, "Number of instructions eliminated");
+// STATISTIC(BasicBlocksEliminated,  "Number of basic blocks entirely eliminated");
+
 namespace {
 class RADeadCodeElimination : public llvm::FunctionPass {
 private:
@@ -40,25 +43,23 @@ private:
     // errs() << '\n';
     
     bool has_changed = false;
-    switch (I->getPredicate()){
+    switch (I->getPredicate()) {
       case CmpInst::ICMP_EQ:
         if (range1.getLower() == range1.getUpper() == 
             range2.getLower() == range2.getUpper()) {
           replaceConditionalBranch(br, 0);
           has_changed = true;
         } else {
-            if(I->isSigned) {
-              (range1.getUpper().sle(range2.getLower())) {
+            if(I->isSigned()) {
+              (range1.getUpper().sle(range2.getLower()));
               replaceConditionalBranch(br, 1);
               has_changed = true;
             } else {
-              (range2.getUpper().sle(range1.getLower())) {
+              (range2.getUpper().sle(range1.getLower()));
               replaceConditionalBranch(br, 1);
               has_changed = true;
             }
         }
-        break;
- 
         break;
 
       case CmpInst::ICMP_UGT:
@@ -119,6 +120,7 @@ private:
         } else if(range1.getLower().slt(range2.getUpper())) {
           replaceConditionalBranch(br, 1);
           has_changed = true;
+        }
         break;
 
       case CmpInst::ICMP_SLT:
