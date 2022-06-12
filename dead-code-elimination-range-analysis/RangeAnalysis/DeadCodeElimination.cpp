@@ -5,8 +5,9 @@
 
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Pass.h"
-#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/User.h"
 #include "llvm/PassAnalysisSupport.h"
 #include "llvm/Support/raw_ostream.h"
@@ -151,6 +152,12 @@ private:
     return has_changed;
   }
 
+  bool hasConstantRange(Instruction *I){
+    InterProceduralRA<Cousot> &ra = getAnalysis<InterProceduralRA<Cousot>>();
+    const Value *v = &(*I);
+    Range r = ra.getRange(v);
+    return !r.isUnknown() && r.getLower() == r.getUpper();
+  }
 
 public:
   static char ID;
@@ -159,7 +166,7 @@ public:
   
 
   virtual bool runOnFunction(Function &F) {
-    // InterProceduralRA<Cousot> &ra = getAnalysis<InterProceduralRA<Cousot>>();
+    InterProceduralRA<Cousot> &ra = getAnalysis<InterProceduralRA<Cousot>>();
     bool has_changed = false;
     BasicBlocksEliminated = F.size();
     InstructionsEliminated = 0;
@@ -169,8 +176,40 @@ public:
         has_changed |= solveBranchInstruction(br);
       }
     }
-
     removeUnreachableBlocks(F);
+
+    for (Function::iterator bb = F.begin(), bbEnd = F.end(); bb != bbEnd; ++bb){
+      std::vector<PHINode*> phiNodesToDelete;
+      std::vector<Instruction*> constantInstructions;
+      for (BasicBlock::iterator I = bb->begin(), IEnd = bb->end(); I != IEnd; ++I) {
+        if (PHINode *PN = dyn_cast<PHINode>(&(*I))) {
+          if(PN->getNumIncomingValues() == 1) {
+            phiNodesToDelete.push_back(PN);
+          }
+        } else if(hasConstantRange(&(*I))){
+          constantInstructions.push_back(&(*I));
+        }
+      }
+
+      has_changed |= !phiNodesToDelete.empty() || !constantInstructions.empty();
+      errs() << !constantInstructions.empty() << '\n';
+      for(int i=0; i<phiNodesToDelete.size(); ++i){
+        phiNodesToDelete[i]->replaceAllUsesWith(phiNodesToDelete[i]->getIncomingValue(0));
+        RecursivelyDeleteTriviallyDeadInstructions(phiNodesToDelete[i]);
+      }
+      for(int i=0; i<constantInstructions.size(); ++i){
+        Value *v = constantInstructions[i];
+        Range r = ra.getRange(v);
+        if (IntegerType *IT = dyn_cast<IntegerType>(v->getType())) {
+          ConstantInt* CT = ConstantInt::get(v->getContext(), r.getUpper());
+          v->replaceAllUsesWith(CT);
+          RecursivelyDeleteTriviallyDeadInstructions(v);
+        }
+      }
+      if (BasicBlock *pred = bb->getSinglePredecessor())
+        if (BasicBlock *succ = pred->getSingleSuccessor())
+            MergeBasicBlockIntoOnlyPred(succ);
+    }
     
     BasicBlocksEliminated -= F.size();
     for (Function::iterator bb = F.begin(), bbEnd = F.end(); bb != bbEnd; ++bb){

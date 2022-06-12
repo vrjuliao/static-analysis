@@ -12,15 +12,25 @@ bb2:                                              ; preds = %bb13, %bb
   %tmp1.0 = phi i32 [ 0, %bb ], [ %tmp8, %bb13 ]
   %tmp.0 = phi i32 [ 0, %bb ], [ %tmp15, %bb13 ]
   %tmp4 = icmp slt i32 %tmp.0, 100
-  br i1 %tmp4, label %bb13, label %bb16
+  br i1 %tmp4, label %bb5, label %bb2.bb16_crit_edge
 
-bb13:                                             ; preds = %bb2
+bb2.bb16_crit_edge:                               ; preds = %bb2
+  br label %bb16
+
+bb5:                                              ; preds = %bb2
   %vSSA_sigma = phi i32 [ %tmp.0, %bb2 ]
   %tmp8 = add nsw i32 %tmp1.0, %vSSA_sigma
-  %tmp15 = add nsw i32 %vSSA_sigma, 1
+  br label %bb12
+
+bb12:                                             ; preds = %bb5
+  %vSSA_sigma1 = phi i32 [ %vSSA_sigma, %bb5 ]
+  br label %bb13
+
+bb13:                                             ; preds = %bb12
+  %tmp15 = add nsw i32 %vSSA_sigma1, 1
   br label %bb2
 
-bb16:                                             ; preds = %bb2
+bb16:                                             ; preds = %bb2.bb16_crit_edge
   ret i32 %tmp1.0
 }
 

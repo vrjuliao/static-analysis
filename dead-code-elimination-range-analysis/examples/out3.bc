@@ -15,9 +15,8 @@ bb2:                                              ; preds = %bb13, %bb
   br i1 %tmp4, label %bb13, label %bb16
 
 bb13:                                             ; preds = %bb2
-  %vSSA_sigma = phi i32 [ %tmp.0, %bb2 ]
-  %tmp8 = add nsw i32 %tmp1.0, %vSSA_sigma
-  %tmp15 = add nsw i32 %vSSA_sigma, 1
+  %tmp8 = add nsw i32 %tmp1.0, %tmp.0
+  %tmp15 = add nsw i32 %tmp.0, 1
   br label %bb2
 
 bb16:                                             ; preds = %bb2
