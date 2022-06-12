@@ -33,11 +33,10 @@ private:
     RecursivelyDeleteTriviallyDeadInstructions(cond);
   }
 
-  bool solveBranchInstruction(BranchInst* br) {
+  bool solveBranchInstruction(BranchInst* br, InterProceduralRA<Cousot> &ra) {
     if (br->isUnconditional()) return false;
     ICmpInst *I = dyn_cast<ICmpInst>(br->getCondition());
     if(!I) return false;
-    InterProceduralRA < Cousot > &ra = getAnalysis < InterProceduralRA < Cousot > >();
     Range range1 = ra.getRange(I->getOperand(0));
     Range range2 = ra.getRange(I->getOperand(1));
     // range1.print(errs());
@@ -152,8 +151,7 @@ private:
     return has_changed;
   }
 
-  bool hasConstantRange(Instruction *I){
-    InterProceduralRA<Cousot> &ra = getAnalysis<InterProceduralRA<Cousot>>();
+  bool hasConstantRange(Instruction *I, InterProceduralRA<Cousot> &ra){
     const Value *v = &(*I);
     Range r = ra.getRange(v);
     return !r.isUnknown() && r.getLower() == r.getUpper();
@@ -168,35 +166,42 @@ public:
   virtual bool runOnFunction(Function &F) {
     InterProceduralRA<Cousot> &ra = getAnalysis<InterProceduralRA<Cousot>>();
     bool has_changed = false;
+    
+    // Remove dead basic blocks
     BasicBlocksEliminated = F.size();
     InstructionsEliminated = 0;
-    for (Function::iterator bb = F.begin(), bbEnd = F.end(); bb != bbEnd; ++bb) {
-      InstructionsEliminated += bb->size();
-      if (BranchInst *br = dyn_cast<BranchInst>(--(bb->end()))){
-        has_changed |= solveBranchInstruction(br);
+    for (BasicBlock &bb: F) {
+      InstructionsEliminated += bb.size();
+      if (BranchInst *br = dyn_cast<BranchInst>(--(bb.end()))){
+        has_changed |= solveBranchInstruction(br, ra);
       }
     }
     removeUnreachableBlocks(F);
 
-    for (Function::iterator bb = F.begin(), bbEnd = F.end(); bb != bbEnd; ++bb){
+
+    // Collects the "single" incoming values in phi-functions
+    // Collects variables that are constants
+    for (BasicBlock &bb: F){
       std::vector<PHINode*> phiNodesToDelete;
       std::vector<Instruction*> constantInstructions;
-      for (BasicBlock::iterator I = bb->begin(), IEnd = bb->end(); I != IEnd; ++I) {
-        if (PHINode *PN = dyn_cast<PHINode>(&(*I))) {
+      for (Instruction &I: bb) {
+        if (PHINode *PN = dyn_cast<PHINode>(&I)) {
           if(PN->getNumIncomingValues() == 1) {
             phiNodesToDelete.push_back(PN);
           }
-        } else if(hasConstantRange(&(*I))){
-          constantInstructions.push_back(&(*I));
+        } else if(hasConstantRange(&I, ra)){
+          constantInstructions.push_back(&I);
         }
       }
 
+      // Replaces phi-functions that have "single" incoming values to the proper value
       has_changed |= !phiNodesToDelete.empty() || !constantInstructions.empty();
-      errs() << !constantInstructions.empty() << '\n';
       for(int i=0; i<phiNodesToDelete.size(); ++i){
         phiNodesToDelete[i]->replaceAllUsesWith(phiNodesToDelete[i]->getIncomingValue(0));
         RecursivelyDeleteTriviallyDeadInstructions(phiNodesToDelete[i]);
       }
+
+      // Constant propagation
       for(int i=0; i<constantInstructions.size(); ++i){
         Value *v = constantInstructions[i];
         Range r = ra.getRange(v);
@@ -206,11 +211,14 @@ public:
           RecursivelyDeleteTriviallyDeadInstructions(v);
         }
       }
-      if (BasicBlock *pred = bb->getSinglePredecessor())
+
+      // Merges basic blocks
+      if (BasicBlock *pred = bb.getSinglePredecessor())
         if (BasicBlock *succ = pred->getSingleSuccessor())
             MergeBasicBlockIntoOnlyPred(succ);
     }
     
+    // computes statistics
     BasicBlocksEliminated -= F.size();
     for (Function::iterator bb = F.begin(), bbEnd = F.end(); bb != bbEnd; ++bb){
       InstructionsEliminated -= bb->size();
